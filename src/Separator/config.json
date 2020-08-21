@@ -1,0 +1,16 @@
+{
+    "folders":{
+        "data": "data"
+    },
+    "datasets":{
+        "train": ["MAFAT RADAR Challenge - Training Set V1", -1],
+        "train_spliced": ["MAFAT RADAR Challenge - Training Set V1 - Spliced", -1],
+        "experiment": ["MAFAT RADAR Challenge - Auxiliary Experiment Set V2", -1],
+        "synthetic": ["MAFAT RADAR Challenge - Auxiliary Synthetic Set V2", -1],
+        "test": ["MAFAT RADAR Challenge - Public Test Set V1", -1],
+        "empty": ["MAFAT RADAR Challenge - Auxiliary Background(empty) Set V1", -1]
+    },
+    "training":{
+        "dataset_length":1e2
+    }
+}

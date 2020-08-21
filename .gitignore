@@ -1,0 +1,10 @@
+.vscode
+data/
+lightning_logs/
+sandbox/
+exp/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+.idea/
