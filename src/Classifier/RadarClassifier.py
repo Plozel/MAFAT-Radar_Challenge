@@ -5,7 +5,7 @@ from scipy import signal as sg
 
 import torch
 import torch.nn as nn
-from torch.utils.data import ConcatDataset, random_split
+from torch.utils.data import random_split
 from torch.utils.data.dataloader import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
@@ -14,7 +14,7 @@ from pytorch_lightning.core.lightning import LightningModule
 from pytorch_lightning.metrics.functional import accuracy
 
 from ..utils import load_classifier_config
-from ..Dataset_handlers.MAFATDataset import MAFATDataset, MAFATDatasetTwoHeads
+from ..Dataset_handlers.MAFATDataset import MAFATDataset, MAFATDatasetAugmented
 
 
 # sets seeds for numpy, torch, etc...
@@ -126,7 +126,7 @@ class Inception(LightningModule):
 class ConvNet(LightningModule):
     def __init__(self):
         super(ConvNet, self).__init__()
-        self.pre_process_layer = PreProcessLayer(mode='real', zero_pad=False).requires_grad_(False)
+        self.pre_process_layer = PreProcessLayer(mode='real', zero_pad=True).requires_grad_(False)
 
         self.first_layer = nn.Sequential(
             nn.Conv2d(self.pre_process_layer.n_win, 30, kernel_size=3, padding=1),
@@ -147,7 +147,7 @@ class ConvNet(LightningModule):
 
         self.avgpool = nn.AvgPool2d(8, stride=1)
         self.dropout = nn.Dropout(p=0.3)
-        self.linear = nn.Sequential(nn.Linear(2750, 9))
+        self.linear = nn.Linear(6270, 2)
 
         self.logsoftmax = nn.LogSoftmax()
 
@@ -182,12 +182,12 @@ class RadarClassifier(LightningModule):
         return self.cnn(x)
 
     def prepare_data(self):
-        dataset = ConcatDataset([MAFATDataset(self.config, name) for name in self.config['datasets'].keys() if name != 'test'])
+        dataset = MAFATDatasetAugmented([name for name in self.config['datasets'].keys() if name not in ['test', 'empty']], self.config) 
         # labels = np.concatenate([ds.target_type for ds in dataset.datasets])
         # u, uc = np.unique(labels, return_index=False, return_inverse=False, return_counts=True, axis=None)
         n_val = int(len(dataset) * self.config['training']['fraction_of_examples_to_use_for_validation'])
         self.train_set, self.val_set = random_split(dataset, [len(dataset) - n_val, n_val])
-        self.test_set = MAFATDataset(self.config, 'test')
+        self.test_set = MAFATDataset(['test'], self.config)
 
     def train_dataloader(self):
         return DataLoader(self.train_set, batch_size=self.batch_size, num_workers=8, shuffle=False)
@@ -244,18 +244,3 @@ class RadarClassifier(LightningModule):
             # Save submission
             submission.to_csv(os.path.join(self.config['folders']['trained_models'],'SubmissionFiles', 'submission_{}.csv'.format(self.id)), index=False)
 
-
-class RadarClassifierTwoHeads(RadarClassifier):
-    def convert_to_two_heads(self, checkpoint_path:str = None):
-        self.load_from_checkpoint(checkpoint_path)
-        for param in self.cnn.parameters():
-            param.requires_grad = False
-        self.cnn.linear = nn.Linear(2750, 2)
-
-    def prepare_data(self):
-        dataset = ConcatDataset([MAFATDatasetTwoHeads(self.config, name) for name in self.config['datasets'].keys() if name not in ['test', 'empty']])
-        # labels = np.concatenate([ds.target_type for ds in dataset.datasets])
-        # u, uc = np.unique(labels, return_index=False, return_inverse=False, return_counts=True, axis=None)
-        n_val = int(len(dataset) * self.config['training']['fraction_of_examples_to_use_for_validation'])
-        self.train_set, self.val_set = random_split(dataset, [len(dataset) - n_val, n_val])
-        self.test_set = MAFATDatasetTwoHeads(self.config, 'test')

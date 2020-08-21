@@ -5,7 +5,7 @@ import pandas as pd
 
 
 # Choose data:
-data_folder = '/home/yonattan/projects/MAFAT-Radar_Challenge/data'
+data_folder = os.path.normpath(os.path.join(os.path.dirname(__file__), '../../data'))
 set_name = 'MAFAT RADAR Challenge - Training Set V1'
 
 # Read data:
@@ -42,7 +42,7 @@ for track_id in metadata_df['track_id'].unique():
 # Rearrange the new data and add segment_id:
 new_data['iq_sweep_burst'] =  np.stack(new_data['iq_sweep_burst'])
 new_data['doppler_burst'] = np.stack(new_data['doppler_burst'])
-new_data['segment_id'] = np.arange(new_data['doppler_burst'].shape[0])
+new_data['segment_id'] = np.arange(new_data['doppler_burst'].shape[0]) * 10 + 2
 new_metadata = pd.DataFrame(new_metadata)
 new_metadata['segment_id'] = new_metadata.index
 

@@ -2,26 +2,35 @@ import os
 import pickle
 import numpy as np
 import pandas as pd
+from random import choices
 from typing import Dict, List
-from itertools import product
 
 import torch
+from torch.utils.data import ConcatDataset
 from torch.utils.data.dataset import Dataset, TensorDataset
 
+from ..utils import load_classifier_config
 
 class MAFATDataset(Dataset):
-    def __init__(self, config: Dict, name: str):
+    def __init__(self, name_list: List[str], config:Dict = None):
         super().__init__()
-        target_types = ['empty', 'animal', 'human']
-        geolocation_type = ['A', 'C', 'D']
-        combinations = list(product(target_types, geolocation_type))
-        self.idx_to_label = {ii: x for ii,x in enumerate(combinations)}
-        self.label_to_idx = {x: ii for ii,x in enumerate(combinations)}
-        data = self._load_dataset(config, name)
-        self.segments_dataset = self._convert_to_dataset(data)
-        self.segment_ids = data['segment_id']
-        self.geolocation_type = data['geolocation_type'] if 'geolocation_type' in data.keys() else None
-        self.target_type = data['target_type'] if 'target_type' in data.keys() else None
+        if config is None:
+            config = load_classifier_config()
+        dataset_list = []
+        target_segment_ids_list = []
+        target_geolocation_type_list = []
+        target_type_list = []
+        for name in name_list:
+            target_data = self._load_dataset(config, name)
+            # Load human \ animal dataset:
+            dataset_list.append(self._convert_to_dataset(target_data))
+            target_segment_ids_list.append(target_data['segment_id'])
+            target_geolocation_type_list.append(target_data['geolocation_type'] if 'geolocation_type' in target_data.keys() else None)
+            target_type_list.append(target_data['target_type'] if 'target_type' in target_data.keys() else None)
+        self.target_set = ConcatDataset(dataset_list)
+        self.target_segment_ids = np.concatenate(target_segment_ids_list, axis=0)
+        self.target_geolocation_type = np.concatenate(target_geolocation_type_list, axis=0) if target_geolocation_type_list[0] is not None else None
+        self.target_type = np.concatenate(target_type_list, axis=0) if target_type_list[0] is not None else None
 
     @staticmethod
     def _load_dataset(config, name) -> Dict:
@@ -32,22 +41,20 @@ class MAFATDataset(Dataset):
             data = pickle.load(f)
         meta = pd.read_csv(os.path.join(config['folders']['data'], set_name + '.csv'))
         # Unpack to dictionary and cast to numpy arrays:
-        data_dictionary = {**meta, **data}
-        for key, item in data_dictionary.items():
-            data_dictionary[key] = np.array(item)
+        data_dict = {**meta, **data}
+        for key, item in data_dict.items():
+            data_dict[key] = np.array(item)
         # Restrict data set size:
-        n_set = len(data_dictionary['segment_id'])
+        n_set = len(data_dict['segment_id'])
         if n_max != -1 and n_set > n_max:
             sample_indexes = np.random.choice(n_set, size=n_max, replace=False)
-            for key, item in data_dictionary.items():
-                data_dictionary[key] = item[sample_indexes] if item.ndim == 1 else item[sample_indexes, :] if item.ndim == 2 else item[sample_indexes, :, :]
-        return data_dictionary
+            for key, item in data_dict.items():
+                data_dict[key] = item[sample_indexes] if item.ndim == 1 else item[sample_indexes, :] if item.ndim == 2 else item[sample_indexes, :, :]
+        return data_dict
 
     def _get_labels(self, data: Dict) -> List:
         if 'target_type' in data.keys():
-            # labels = [1 if label == "human" else 0 if label == "animal" else 2 for label in data["target_type"]]
-            # labels = [0 if label == "A" else 1 if label == "C" else 2 for label in data["geolocation_type"]]
-            labels = [self.label_to_idx[(target, geo)] for target, geo in zip(data["target_type"], data["geolocation_type"])]
+            labels = [1 if label == "human" else 0 if label == "animal" else 2 for label in data["target_type"]]
         else:
             labels = [-1 for i in range(len(data['segment_id']))]
         return labels
@@ -59,17 +66,47 @@ class MAFATDataset(Dataset):
         return dataset
 
     def __len__(self):
-        return len(self.segments_dataset)
+        return len(self.target_set)
 
     def __getitem__(self, index):
-        iq_data, label = self.segments_dataset[index]
-        return iq_data, label
+        return self.target_set[index]
 
 
-class MAFATDatasetTwoHeads(MAFATDataset):
-    def _get_labels(self, data: Dict) -> List:
-        if 'target_type' in data.keys():
-            labels = [1 if label == "human" else 0 for label in data["target_type"]]
+class MAFATDatasetAugmented(MAFATDataset):
+    def __init__(self, name_list: List[str], config:Dict = None, combination_list_path: str = None, n_augmentations: int = 5):
+        super().__init__(name_list=name_list, config=config)
+        # Load empty dataset:
+        background_data = self._load_dataset(config, 'empty')
+        self.background_set = self._convert_to_dataset(background_data)
+        self.background_segment_ids = background_data['segment_id']
+        self.background_geolocation_type = background_data['geolocation_type']
+        # Create combination list:
+        if combination_list_path is None:
+            self.combination_list = self._create_combination_list(len(self.target_set), len(self.background_set), n_augmentations)
         else:
-            labels = [-1 for i in range(len(data['segment_id']))]
-        return labels
+            self.combination_list = self._load_combination_list(combination_list_path)
+
+    @staticmethod
+    def _load_combination_list(combination_list_path):
+        with open(combination_list_path, 'rb') as f:
+            combination_list = pickle.load(f)
+        return combination_list
+
+    def save_combination_list(self, combination_list_path):
+        with open(combination_list_path, 'wb') as f:
+            pickle.dump(self.combination_list, f)
+
+    @staticmethod
+    def _create_combination_list(len_target: int, len_background: int, n_augmentations):
+        target_list = np.repeat(np.arange(len_target), n_augmentations, axis=0)
+        background_list = choices(range(len_background), k=n_augmentations*len_target)
+        pairs = list(zip(target_list, background_list))
+        return pairs
+
+    def __len__(self):
+        return len(self.combination_list)
+
+    def __getitem__(self, index):
+        target_data, target_label = self.target_set[self.combination_list[index][0]]
+        background_data, _ = self.background_set[self.combination_list[index][1]]
+        return target_data + background_data, target_label

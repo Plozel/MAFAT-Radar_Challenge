@@ -8,7 +8,7 @@ from typing import Dict
 import torch
 from torch.utils.data.dataset import Dataset, TensorDataset
 
-from utils import load_seperator_config
+from ..utils import load_seperator_config
 
 
 class SeparationDataset(Dataset):
@@ -61,7 +61,7 @@ class SeparationDataset(Dataset):
 
     @staticmethod
     def _create_combination_list(len_human: int, len_clutter: int, required_dataset_length):
-        human_list = choices([*range(len_human)], k=required_dataset_length)
+        human_list = choices(range(len_human), k=required_dataset_length)
         clutter_list = choices(range(len_clutter), k=required_dataset_length)
         pairs = list(zip(human_list, clutter_list))
         return pairs
@@ -73,9 +73,3 @@ class SeparationDataset(Dataset):
         human_data, human_power = self.human_set[self.combination_list[index][0]]  # noqa
         clutter_data, clutter_power = self.clutter_set[self.combination_list[index][1]]  # noqa
         return human_data + clutter_data, torch.stack((human_data, clutter_data))
-
-
-if __name__ == "__main__":
-    config = load_seperator_config()
-    sep_dataset = SeparationDataset(config, 5e6)
-    sep_dataset[0]  # noqa
