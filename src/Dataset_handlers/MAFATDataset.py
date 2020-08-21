@@ -64,3 +64,12 @@ class MAFATDataset(Dataset):
     def __getitem__(self, index):
         iq_data, label = self.segments_dataset[index]
         return iq_data, label
+
+
+class MAFATDatasetTwoHeads(MAFATDataset):
+    def _get_labels(self, data: Dict) -> List:
+        if 'target_type' in data.keys():
+            labels = [1 if label == "human" else 0 for label in data["target_type"]]
+        else:
+            labels = [-1 for i in range(len(data['segment_id']))]
+        return labels
