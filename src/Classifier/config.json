@@ -11,7 +11,7 @@
         "empty": ["MAFAT RADAR Challenge - Auxiliary Background(empty) Set V1", -1]
     },
     "training":{
-        "fraction_of_examples_to_use_for_validation": 0.2,
+        "fraction_of_examples_to_use_for_validation": 0.01,
         "learning_rates": 0.001,
         "num_epochs": 500,
         "batch_sizes":100

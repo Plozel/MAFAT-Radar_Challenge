@@ -12,7 +12,7 @@ datasets={
         "empty": "MAFAT RADAR Challenge - Auxiliary Background(empty) Set V1",
         }
 
-data_folder_path = 'Data'
+data_folder_path = 'data'
 
 df_list = []
 for set_name, file_name in datasets.items():
