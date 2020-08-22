@@ -11,7 +11,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from pytorch_lightning import seed_everything
 from pytorch_lightning.core.lightning import LightningModule
-from pytorch_lightning.metrics.functional import accuracy
+from pytorch_lightning.metrics import Accuracy
 
 from ..utils import load_classifier_config
 from ..Dataset_handlers.MAFATDataset import MAFATDataset, MAFATDatasetAugmented
@@ -126,7 +126,7 @@ class Inception(LightningModule):
 class ConvNet(LightningModule):
     def __init__(self):
         super(ConvNet, self).__init__()
-        self.pre_process_layer = PreProcessLayer(mode='real', zero_pad=True).requires_grad_(False)
+        self.pre_process_layer = PreProcessLayer(mode='real', zero_pad=True, run_on_gpu=True).requires_grad_(False)
 
         self.first_layer = nn.Sequential(
             nn.Conv2d(self.pre_process_layer.n_win, 30, kernel_size=3, padding=1),
@@ -177,14 +177,15 @@ class RadarClassifier(LightningModule):
         self.config = load_classifier_config()
         self.learning_rate = self.config['training']['learning_rates']
         self.batch_size = self.config['training']['batch_sizes']
+        self.accuracy = Accuracy(num_classes=2)
 
     def forward(self, x):
         return self.cnn(x)
 
     def prepare_data(self):
-        dataset = MAFATDatasetAugmented([name for name in self.config['datasets'].keys() if name not in ['test', 'empty']], self.config) 
-        # labels = np.concatenate([ds.target_type for ds in dataset.datasets])
-        # u, uc = np.unique(labels, return_index=False, return_inverse=False, return_counts=True, axis=None)
+        dataset = MAFATDatasetAugmented([name for name in self.config['datasets'].keys() if name in ['train', 'train_spliced', 'synthetic']], self.config) 
+        labels = dataset.target_type
+        u, uc = np.unique(labels, return_index=False, return_inverse=False, return_counts=True, axis=None)
         n_val = int(len(dataset) * self.config['training']['fraction_of_examples_to_use_for_validation'])
         self.train_set, self.val_set = random_split(dataset, [len(dataset) - n_val, n_val])
         self.test_set = MAFATDataset(['test'], self.config)
@@ -210,7 +211,7 @@ class RadarClassifier(LightningModule):
         y_hat = self(x)
         loss = self.criterion(y_hat, y)
         tensorboard_logs = {'train_loss': loss}
-        acc = accuracy(y_hat, y)
+        acc = self.accuracy(y_hat, y)
         pbar = {'acc': acc}
         return {'loss': loss, 'log': tensorboard_logs, 'progress_bar': pbar}
 

@@ -25,6 +25,7 @@ for set_name, file_name in datasets.items():
 concatenated_df = pd.concat(df_list)
 
 # Create pivot tables:
+pt_target_type_vs_set_name = pd.pivot_table(concatenated_df, values='val', index='target_type', columns='set_name', aggfunc=np.sum)
 pt_target_type_vs_geolocation_type_and_id = pd.pivot_table(concatenated_df, values='val', index='target_type', columns=['geolocation_type', 'geolocation_id'], aggfunc=np.sum)
 pt_target_type_vs_geolocation_type = pd.pivot_table(concatenated_df, values='val', index='target_type', columns='geolocation_type', aggfunc=np.sum)
 pt_target_type_vs_sensor_id = pd.pivot_table(concatenated_df, values='val', index='target_type', columns='sensor_id', aggfunc=np.sum)

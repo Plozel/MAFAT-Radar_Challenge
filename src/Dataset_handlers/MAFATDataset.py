@@ -73,10 +73,11 @@ class MAFATDataset(Dataset):
 
 
 class MAFATDatasetAugmented(MAFATDataset):
-    def __init__(self, name_list: List[str], config:Dict = None, combination_list_path: str = None, n_augmentations: int = 5):
+    def __init__(self, name_list: List[str], config:Dict = None, combination_list_path: str = None, n_augmentations: int = 2):
         super().__init__(name_list=name_list, config=config)
         # Load empty dataset:
         background_data = self._load_dataset(config, 'empty')
+        background_data = self.add_empty_background(background_data)
         self.background_set = self._convert_to_dataset(background_data)
         self.background_segment_ids = background_data['segment_id']
         self.background_geolocation_type = background_data['geolocation_type']
@@ -85,6 +86,20 @@ class MAFATDatasetAugmented(MAFATDataset):
             self.combination_list = self._create_combination_list(len(self.target_set), len(self.background_set), n_augmentations)
         else:
             self.combination_list = self._load_combination_list(combination_list_path)
+
+    def add_empty_background(self, data):
+        data['segment_id'] = np.insert(data['segment_id'], 0, -1, axis=0)
+        data['track_id'] = np.insert(data['track_id'], 0, -1, axis=0)
+        data['geolocation_type'] = np.insert(data['geolocation_type'], 0, 'Z', axis=0)
+        data['geolocation_id'] = np.insert(data['geolocation_id'], 0, -1, axis=0)
+        data['sensor_id'] = np.insert(data['sensor_id'], 0, -1, axis=0)
+        data['snr_type'] = np.insert(data['snr_type'], 0, 'EMPTY', axis=0)
+        data['date_index'] = np.insert(data['date_index'], 0, -1, axis=0)
+        data['target_type'] = np.insert(data['target_type'], 0, 'empty', axis=0)
+        data['doppler_burst'] = np.insert(data['doppler_burst'], 0, np.zeros((1, 32)), axis=0)
+        data['iq_sweep_burst'] = np.insert(data['iq_sweep_burst'], 0, np.zeros((1, 128, 32)), axis=0)
+        return data
+
 
     @staticmethod
     def _load_combination_list(combination_list_path):
@@ -98,8 +113,9 @@ class MAFATDatasetAugmented(MAFATDataset):
 
     @staticmethod
     def _create_combination_list(len_target: int, len_background: int, n_augmentations):
-        target_list = np.repeat(np.arange(len_target), n_augmentations, axis=0)
-        background_list = choices(range(len_background), k=n_augmentations*len_target)
+        target_list = np.repeat(np.arange(len_target), n_augmentations + 1, axis=0)
+        background_list = np.array(choices(range(len_background - 1), k=n_augmentations * len_target))
+        background_list = np.ravel(np.pad(np.reshape(background_list, (len_target, n_augmentations)), ((0, 0), (1, 0)))).tolist()
         pairs = list(zip(target_list, background_list))
         return pairs
 
