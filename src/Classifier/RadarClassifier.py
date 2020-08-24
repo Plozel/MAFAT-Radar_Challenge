@@ -11,7 +11,8 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from pytorch_lightning import seed_everything
 from pytorch_lightning.core.lightning import LightningModule
-from pytorch_lightning.metrics import Accuracy
+from pytorch_lightning.metrics import Accuracy, F1, Recall, Precision
+
 
 from kornia.losses import FocalLoss
 
@@ -180,6 +181,11 @@ class RadarClassifier(LightningModule):
         self.learning_rate = self.config['training']['learning_rates']
         self.batch_size = self.config['training']['batch_sizes']
         self.accuracy = Accuracy(num_classes=2)
+        self.f1 = F1()
+        self.recall = Recall()
+        self.precision = Precision()
+
+
 
     def forward(self, x):
         return self.cnn(x)
@@ -214,7 +220,11 @@ class RadarClassifier(LightningModule):
         loss = self.criterion(y_hat, y)
         tensorboard_logs = {'train_loss': loss}
         acc = self.accuracy(y_hat, y)
-        pbar = {'acc': acc}
+        f1 = self.f1(y_hat, y)
+        recall = self.recall(y_hat, y)
+        precision = self.precision(y_hat, y)
+
+        pbar = {'ACC': acc, 'F1': f1, 'RECALL': recall, 'PRECISION': precision}
         return {'loss': loss, 'log': tensorboard_logs, 'progress_bar': pbar}
 
     def validation_step(self, batch, batch_idx):
@@ -222,9 +232,12 @@ class RadarClassifier(LightningModule):
 
     def validation_epoch_end(self, outputs):
         avg_loss = torch.stack([x['loss'] for x in outputs]).mean()
-        avg_acc = torch.stack([x['progress_bar']['acc'] for x in outputs]).mean()
-        tensorboard_logs = {'val_loss': avg_loss, 'val_acc': avg_acc}
-        pbar = {'val_acc': avg_acc}
+        avg_acc = torch.stack([x['progress_bar']['ACC'] for x in outputs]).mean()
+        avg_f1 = torch.stack([x['progress_bar']['F1'] for x in outputs]).mean()
+        avg_recall = torch.stack([x['progress_bar']['RECALL'] for x in outputs]).mean()
+        avg_precision = torch.stack([x['progress_bar']['PRECISION'] for x in outputs]).mean()
+        tensorboard_logs = {'val_loss': avg_loss, 'val_acc': avg_acc, 'val_avg_f1': avg_f1, 'val_avg_recall': avg_recall, 'val_avg_precision': avg_precision}
+        pbar = {'val_acc': avg_acc, 'val_avg_f1': avg_f1, 'val_avg_recall': avg_recall, 'val_avg_precision': avg_precision}
         return {'val_loss': avg_loss, 'log': tensorboard_logs, 'progress_bar': pbar}
 
     def test_step(self, batch, batch_idx):

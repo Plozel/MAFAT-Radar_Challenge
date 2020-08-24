@@ -115,7 +115,7 @@ class MAFATDatasetAugmented(MAFATDataset):
     @staticmethod
     def _create_combination_list(len_target: int, len_background: int, n_augmentations):
         target_list = np.repeat(np.arange(len_target), n_augmentations + 1, axis=0)
-        background_list = np.array(choices(np.arange(1, len_background+1), k=n_augmentations * len_target))
+        background_list = np.array(choices(np.arange(1, len_background), k=n_augmentations * len_target))
         background_list = np.ravel(np.pad(np.reshape(background_list, (len_target, n_augmentations)), ((0, 0), (1, 0)))).tolist()
         pairs = list(zip(target_list, background_list))
         return pairs
