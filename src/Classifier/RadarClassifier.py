@@ -13,6 +13,8 @@ from pytorch_lightning import seed_everything
 from pytorch_lightning.core.lightning import LightningModule
 from pytorch_lightning.metrics import Accuracy
 
+from kornia.losses import FocalLoss
+
 from ..utils import load_classifier_config
 from ..Dataset_handlers.MAFATDataset import MAFATDataset, MAFATDatasetAugmented
 
@@ -42,10 +44,10 @@ class PreProcessLayer(LightningModule):
         x = x.view((-1, 1, 128, 32))  # (batch_size, unitary dimension for sampling_windows, fast_time, slow_time)
         # Perform an FFT:
         x = x.expand(-1, self.n_win, 128, 32) * self.sampling_windows
-        x = torch.view_as_real(x.permute(0,1,3,2))
-        x = nn.functional.pad(x, (0,0,0,128)) if self.zero_pad else x
+        x = torch.view_as_real(x.permute(0, 1, 3, 2))
+        x = nn.functional.pad(x, (0, 0, 0, 128)) if self.zero_pad else x
         x = torch.fft(x, 1)
-        x = torch.view_as_complex(x).permute(0,1,3,2)
+        x = torch.view_as_complex(x).permute(0, 1, 3, 2)
         # Perform an FFT shift to bring the zero relative velocity to the center:
         x = torch.roll(x, int(0.5 * self.n_fft), dims=2)
         # Compute norms in log scale:
@@ -60,9 +62,9 @@ class PreProcessLayer(LightningModule):
             a1 = y1 / x1
             a2 = ((y2 - y1) / (x2 - x1))
             b2 = y2 - a2 * x2
-            low_norm_multiplier = a1.view((-1,self.n_win,1,1)) * x
-            high_norm_multiplier = a2.view((-1,self.n_win,1,1)) * x + b2.view((-1,self.n_win,1,1))
-            multiplier_3d = torch.where(x_norms > x1.view((-1,self.n_win,1,1)), high_norm_multiplier, low_norm_multiplier)
+            low_norm_multiplier = a1.view((-1, self.n_win, 1, 1)) * x
+            high_norm_multiplier = a2.view((-1, self.n_win, 1, 1)) * x + b2.view((-1,self.n_win,1,1))
+            multiplier_3d = torch.where(x_norms > x1.view((-1, self.n_win, 1, 1)), high_norm_multiplier, low_norm_multiplier)
             x = x * multiplier_3d
             return x.real, x.imag
         else:
@@ -173,7 +175,7 @@ class RadarClassifier(LightningModule):
     def __init__(self):
         super().__init__()
         self.cnn = ConvNet()
-        self.criterion = nn.NLLLoss()  # negative log likelihood loss function
+        self.criterion = FocalLoss(alpha=0.5, gamma=2.0, reduction='mean')
         self.config = load_classifier_config()
         self.learning_rate = self.config['training']['learning_rates']
         self.batch_size = self.config['training']['batch_sizes']
@@ -191,7 +193,7 @@ class RadarClassifier(LightningModule):
         self.test_set = MAFATDataset(['test'], self.config)
 
     def train_dataloader(self):
-        return DataLoader(self.train_set, batch_size=self.batch_size, num_workers=8, shuffle=False)
+        return DataLoader(self.train_set, batch_size=self.batch_size, num_workers=8, shuffle=True)
 
     def val_dataloader(self):
         return DataLoader(self.val_set, batch_size=self.batch_size, num_workers=8, shuffle=False)

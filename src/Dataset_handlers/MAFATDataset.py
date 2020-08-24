@@ -11,8 +11,9 @@ from torch.utils.data.dataset import Dataset, TensorDataset
 
 from ..utils import load_classifier_config
 
+
 class MAFATDataset(Dataset):
-    def __init__(self, name_list: List[str], config:Dict = None):
+    def __init__(self, name_list: List[str], config: Dict = None):
         super().__init__()
         if config is None:
             config = load_classifier_config()

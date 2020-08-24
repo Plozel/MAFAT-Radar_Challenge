@@ -10,6 +10,7 @@ if __name__ == "__main__":
     model.load_from_checkpoint(checkpoint_path)
     test_set = MAFATDataset(['test'])
     predictions = []
+    model.eval()
     with torch.no_grad():
         for (iq_data, _) in test_set:
             y_hat = model(iq_data)

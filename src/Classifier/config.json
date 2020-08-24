@@ -14,6 +14,6 @@
         "fraction_of_examples_to_use_for_validation": 0.1,
         "learning_rates": 0.001,
         "num_epochs": 500,
-        "batch_sizes":50
+        "batch_sizes":30
     }
 }
